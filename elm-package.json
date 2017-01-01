@@ -1,7 +1,7 @@
 {
     "version": "1.0.0",
-    "summary": "Example of a recusrive type with supporting methods",
-    "repository": "https://github.com/richardhaven/elm-example-recursive-type",
+    "summary": "An example of a recusive type with supporting methods",
+    "repository": "https://github.com/richardhaven/elm-example-recursive-type.git",
     "license": "BSD3",
     "source-directories": [
         "src"

@@ -1,12 +1,14 @@
 module Node
     exposing
         ( Item
+        , ItemId
         , Node
         , ItemList
         , RootNode
         , itemOf
         , childrenOf
         , createRoot
+        , createChildren
         , createChild
         , updateChild
         , changeParent
@@ -33,8 +35,25 @@ module Node
 
     I fleshed out the basic support methods as well as the tests as an example.
 
-    Note that creating, deleting, and updating any Item requires building a whole new tree
+    When changing any item or adding or removing any child, one must regenerate the entire tree
     because that's all the caller can deal with: replacing the root node.
+
+        update msg model =
+            case msg of
+                CreateChild parentId title description ->
+                    {model | rootNode = Node.createChild (findNextId model.rootNode) parentId title description model.rootNode }
+
+    If one's model allows workinig with a lower branch ("headNode")
+
+                UpdateChildTitle id newTitle ->
+                    updateRootAndHead model (Node.updateChild (\item -> {item | title = newTitle} id  model.rootNode)
+
+        updateRootAndHead model newRoot =
+            let
+                newHead = Maybe.withDefault newRoot findNodeById itemof(model.headNode).id newRoot
+            in
+                {model | rootNode = newRoot, headNode = newHead}
+
 -}
 
 
@@ -93,6 +112,33 @@ createRoot rootId rootName rootDescription =
         []
 
 
+{-| Creates new Items and returns the final rootNode. If any child creation fails, no rollback or undo needed
+    let
+        newRoot = createChildren [{"43" "7" "new child" "this is a new child Item"},
+                                  {"48", "43", "grandchild", ""}]
+                                  model.rootNode
+    in
+        case newRoot of
+            Err message ->
+                {model | errorMessage = message}
+            Ok newRoot ->
+                {model | rootNode = newRoot, errorMessage = ""}
+-}
+createChildren : List Item -> RootNode -> Result String RootNode
+createChildren childAttributesList root =
+    List.foldr
+        (\attributes previousRoot ->
+            case previousRoot of
+                Err message ->
+                    Err message
+
+                Ok root ->
+                    createChild attributes.id attributes.parentId attributes.title attributes.description root
+        )
+        (Ok root)
+        childAttributesList
+
+
 {-| Creates a new Item and returns the updated rootNode
     let
         newRoot = createChild 43 7 "new child" "this is a new child Item" model.rootNode
@@ -134,9 +180,9 @@ createChild anItemId aParentId aTitle aDescription root =
 validateNewChild : Node Item -> RootNode -> Maybe String
 validateNewChild (Node item _) root =
     if findNodeById item.id root /= Nothing then
-        Just "Item id already exists"
+        Just ("Item id " ++ item.id ++ " already exists")
     else if (findNodeById item.parentId root) == Nothing then
-        Just "Parent id does not exist"
+        Just ("Parent id " ++ item.parentId ++ " does not exist for " ++ item.id)
     else
         Nothing
 
