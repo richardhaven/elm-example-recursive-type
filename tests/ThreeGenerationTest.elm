@@ -90,12 +90,6 @@ threeGenerationCreationTest =
                     , test "Check findNodesByTitle" <|
                         \() ->
                             Expect.notEqual (findNodesByTitle "grandchild title" rootNode) []
-                    , test "Negative check findNodeById" <|
-                        \() ->
-                            Expect.equal (findNodeById "XXXX" rootNode) Nothing
-                    , test "Negative test findNodeByTitle" <|
-                        \() ->
-                            Expect.equal (findNodesByTitle "XXXXXX" rootNode) []
                     ]
 
 
@@ -167,7 +161,9 @@ threeGenerationUpdateItemTest =
 
                     Just targetNode ->
                         describe "Test updating an item" <|
-                            [ test "Test updating an item" <|
+                            [ test "startng state" <|
+                                \() -> Expect.notEqual targetNode.description "I've been changed"
+                            , test "Test updating an item" <|
                                 \() ->
                                     case (updateItem (\item -> { item | description = "I've been changed" }) targetNode rootNode) of
                                         Err message ->
@@ -257,8 +253,8 @@ threeGenerationChangeParentComplexTest =
                     (Node.createChildren
                         [ { id = "child1 child1 id", parentId = "child1 id", title = "child11 title", description = "child11 description" }
                         , { id = "child1 child2 id", parentId = "child1 id", title = "child12 title", description = "child12 description" }
-                        , { id = "child2 child2", parentId = "child2 id", title = "child22 title", description = "child22 description" }
-                        , { id = "grandchild child id", parentId = "grancdchild child id", title = "child211 title", description = "child211 description" }
+                        , { id = "child2 child2 id", parentId = "child2 id", title = "child22 title", description = "child22 description" }
+                        , { id = "grandchild child id", parentId = "grandchild id", title = "child211 title", description = "child211 description" }
                         ]
                         rootNode
                     )
@@ -440,7 +436,13 @@ threeGenerationNegativeTest =
 
             Ok rootNode ->
                 describe "Negative tests" <|
-                    [ test "negative createChild" <|
+                    [ test "Negative check findNodeById" <|
+                        \() ->
+                            Expect.equal (findNodeById "XXXX" rootNode) Nothing
+                    , test "Negative test findNodeByTitle" <|
+                        \() ->
+                            Expect.equal (findNodesByTitle "XXXXXX" rootNode) []
+                    , test "negative createChild" <|
                         \() ->
                             Expect.true "negative createChild duplicate id"
                                 (isResultErr
