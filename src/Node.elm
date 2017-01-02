@@ -1,14 +1,16 @@
 module Node
     exposing
         ( Item
+        , ItemId
         , Node
         , ItemList
         , RootNode
         , itemOf
         , childrenOf
         , createRoot
+        , createChildren
         , createChild
-        , updateChild
+        , updateItem
         , changeParent
         , deleteChild
         , findNodeById
@@ -33,8 +35,25 @@ module Node
 
     I fleshed out the basic support methods as well as the tests as an example.
 
-    Note that creating, deleting, and updating any Item requires building a whole new tree
+    When changing any item or adding or removing any child, one must regenerate the entire tree
     because that's all the caller can deal with: replacing the root node.
+
+        update msg model =
+            case msg of
+                CreateChild parentId title description ->
+                    {model | rootNode = Node.createChild (findNextId model.rootNode) parentId title description model.rootNode }
+
+    If one's model allows workinig with a lower branch ("headNode")
+
+                UpdateChildTitle id newTitle ->
+                    updateRootAndHead model (Node.updateChild (\item -> {item | title = newTitle} id  model.rootNode)
+
+        updateRootAndHead model newRoot =
+            let
+                newHead = Maybe.withDefault newRoot findNodeById itemof(model.headNode).id newRoot
+            in
+                {model | rootNode = newRoot, headNode = newHead}
+
 -}
 
 
@@ -93,6 +112,33 @@ createRoot rootId rootName rootDescription =
         []
 
 
+{-| Creates new Items and returns the final rootNode. If any child creation fails, no rollback or undo needed
+    let
+        newRoot = createChildren [{"43" "7" "new child" "this is a new child Item"},
+                                  {"48", "43", "grandchild", ""}]
+                                  model.rootNode
+    in
+        case newRoot of
+            Err message ->
+                {model | errorMessage = message}
+            Ok newRoot ->
+                {model | rootNode = newRoot, errorMessage = ""}
+-}
+createChildren : List Item -> RootNode -> Result String RootNode
+createChildren childAttributesList root =
+    List.foldr
+        (\attributes previousRoot ->
+            case previousRoot of
+                Err message ->
+                    Err message
+
+                Ok root ->
+                    createChild attributes.id attributes.parentId attributes.title attributes.description root
+        )
+        (Ok root)
+        childAttributesList
+
+
 {-| Creates a new Item and returns the updated rootNode
     let
         newRoot = createChild 43 7 "new child" "this is a new child Item" model.rootNode
@@ -134,9 +180,9 @@ createChild anItemId aParentId aTitle aDescription root =
 validateNewChild : Node Item -> RootNode -> Maybe String
 validateNewChild (Node item _) root =
     if findNodeById item.id root /= Nothing then
-        Just "Item id already exists"
+        Just ("Item id " ++ (toString item.id) ++ " already exists")
     else if (findNodeById item.parentId root) == Nothing then
-        Just "Parent id does not exist"
+        Just ("Parent id " ++ (toString item.parentId) ++ " does not exist for " ++ (toString item.id))
     else
         Nothing
 
@@ -145,16 +191,18 @@ validateNewChild (Node item _) root =
 
     {model | rootNode = deleteChild doomedItem model.rootNode}
 -}
-deleteChild : Node Item -> RootNode -> RootNode
+deleteChild : Node Item -> RootNode -> Result String RootNode
 deleteChild (Node doomedItem _) root =
-    root
-        |> nestedNodeMap
+    Ok
+        (nestedNodeMap
             (\(Node item children) ->
                 if item.id == doomedItem.parentId then
                     Node item (List.filter (\(Node item children) -> item.id /= doomedItem.id) children)
                 else
                     Node item children
             )
+            root
+        )
 
 
 {-| Updates the Item and returns the new rootNode
@@ -164,18 +212,29 @@ deleteChild (Node doomedItem _) root =
     This wrapper around nestedItemMap prevents accidentally forgetting to test for a specific
     Item id and modifying every Item.
 
+    We return a Result even though we could return the new RootNode for consistency with the other methods
+
     Do NOT change the parentId here; use changeParent
 -}
-updateChild : (Item -> Item) -> ItemId -> RootNode -> RootNode
-updateChild aFunction targetId root =
-    root
-        |> nestedItemMap
+updateItem : (Item -> Item) -> Node Item -> RootNode -> Result String RootNode
+updateItem aFunction (Node targetItem _) root =
+    Ok
+        (nestedItemMap
             (\item ->
-                if item.id == targetId then
-                    aFunction item
-                else
-                    item
+                let
+                    oldParentId =
+                        item.parentId
+
+                    oldId =
+                        item.id
+                in
+                    if item.id == targetItem.id then
+                        (\anItem -> { anItem | id = oldId, parentId = oldParentId }) <| (aFunction item)
+                    else
+                        item
             )
+            root
+        )
 
 
 {-|
@@ -189,35 +248,33 @@ updateChild aFunction targetId root =
             {model | errorMessage = "", root = newRootNode}
 
 -}
-changeParent : ItemId -> ItemId -> RootNode -> Result String RootNode
-changeParent childId newParentId root =
-    let
-        maybeItem =
-            findNodeById childId root
-    in
-        if (findNodeById newParentId root) == Nothing then
-            Err "New parent not found"
-        else
-            case maybeItem of
-                Nothing ->
-                    Err "Child not found"
-
-                Just (Node originalItem originalItemChldren) ->
-                    root
-                        |> nestedNodeMap
-                            (\(Node item children) ->
-                                if item.id == originalItem.parentId then
-                                    Node item
-                                        (List.filter (\(Node item _) -> item.id /= childId) children)
-                                else if item.id == newParentId then
-                                    Node item
-                                        ((Node { originalItem | parentId = newParentId } originalItemChldren)
-                                            :: children
-                                        )
-                                else
-                                    Node item children
+changeParent : Node Item -> ItemId -> RootNode -> Result String RootNode
+changeParent (Node originalItem originalItemChldren) newParentId root =
+    if originalItem.id == newParentId then
+        Err "An item must not have itself as its parent"
+    else if originalItem.parentId == newParentId then
+        Ok root
+    else if (findNodeById newParentId root) == Nothing then
+        Err "New parent not found"
+    else
+        Ok
+            (nestedNodeMap
+                (\(Node item children) ->
+                    --  we remove the item from the previous parent
+                    if item.id == originalItem.parentId then
+                        Node item
+                            (List.filter (\(Node item _) -> item.id /= originalItem.id) children)
+                        --  and add it to the new parent's children (and update its .parentId)
+                    else if item.id == newParentId then
+                        Node item
+                            ((Node { originalItem | parentId = newParentId } originalItemChldren)
+                                :: children
                             )
-                        |> Ok
+                    else
+                        Node item children
+                )
+                root
+            )
 
 
 {-| Returns a (flat) List of Items matching the title string
