@@ -14,6 +14,7 @@ module Node
         , changeParent
         , deleteChild
         , findNodeById
+        , isItemMember
         , findNodesByTitle
         , nestedItemMap
         , flatList
@@ -43,7 +44,7 @@ module Node
                 CreateChild parentId title description ->
                     {model | rootNode = Node.createChild (findNextId model.rootNode) parentId title description model.rootNode }
 
-    If one's model allows workinig with a lower branch ("headNode")
+    If one's model allows workinig with a lower branch as a sub-set (e.g. "headNode")
 
                 UpdateChildTitle id newTitle ->
                     updateRootAndHead model (Node.updateChild (\item -> {item | title = newTitle} id  model.rootNode)
@@ -126,7 +127,7 @@ createRoot rootId rootName rootDescription =
 -}
 createChildren : List Item -> RootNode -> Result String RootNode
 createChildren childAttributesList root =
-    List.foldr
+    List.foldl
         (\attributes previousRoot ->
             case previousRoot of
                 Err message ->
@@ -161,28 +162,29 @@ createChild anItemId aParentId aTitle aDescription root =
                 }
                 []
     in
-        case validateNewChild newItem root of
-            Nothing ->
-                root
-                    |> nestedNodeMap
-                        (\(Node item children) ->
-                            if item.id == aParentId then
-                                Node item (newItem :: children)
-                            else
-                                Node item children
-                        )
-                    |> Ok
-
+        case getValidationErrors newItem root of
             Just errorMessage ->
                 Err errorMessage
 
+            Nothing ->
+                Ok
+                    (nestedNodeMap
+                        (\aNode ->
+                            if (itemOf aNode).id == aParentId then
+                                Node (itemOf aNode) (newItem :: (childrenOf aNode))
+                            else
+                                aNode
+                        )
+                        root
+                    )
 
-validateNewChild : Node Item -> RootNode -> Maybe String
-validateNewChild (Node item _) root =
-    if findNodeById item.id root /= Nothing then
-        Just ("Item id " ++ (toString item.id) ++ " already exists")
-    else if (findNodeById item.parentId root) == Nothing then
-        Just ("Parent id " ++ (toString item.parentId) ++ " does not exist for " ++ (toString item.id))
+
+getValidationErrors : Node Item -> RootNode -> Maybe String
+getValidationErrors newChild root =
+    if (findNodeById (itemOf newChild).id root) /= Nothing then
+        Just ("Item id " ++ (toString (itemOf newChild).id) ++ " already exists")
+    else if (findNodeById (itemOf newChild).parentId root) == Nothing then
+        Just ("Parent id " ++ (toString (itemOf newChild).parentId) ++ " not found for " ++ (toString (itemOf newChild).id))
     else
         Nothing
 
@@ -277,6 +279,19 @@ changeParent (Node originalItem originalItemChldren) newParentId root =
             )
 
 
+isItemMember : ItemId -> RootNode -> Bool
+isItemMember targetId root =
+    List.foldl
+        (\node isFound ->
+            if isFound then
+                True
+            else
+                (itemOf node).id == targetId
+        )
+        False
+        (flatList root)
+
+
 {-| Returns a (flat) List of Items matching the title string
         this can be an empty List
 
@@ -284,7 +299,14 @@ changeParent (Node originalItem originalItemChldren) newParentId root =
 -}
 findNodesByTitle : String -> RootNode -> ItemList
 findNodesByTitle title root =
-    flatItemFilter (\item -> item.title == title) root
+    let
+        lowerTitle =
+            String.toLower title
+    in
+        if String.length title == 0 then
+            []
+        else
+            flatItemFilter (\anItem -> String.contains lowerTitle (String.toLower anItem.title)) root
 
 
 {-| Returns a Maybe (Node Item) with the found Item or Nothing
@@ -301,7 +323,7 @@ findNodeById : ItemId -> RootNode -> Maybe (Node Item)
 findNodeById targetId root =
     let
         matches =
-            flatItemFilter (\item -> item.id == targetId) root
+            List.filter (\aNode -> (itemOf aNode).id == targetId) (flatList root)
     in
         List.head matches
 
@@ -310,44 +332,44 @@ findNodeById targetId root =
     all Items from every generation
 -}
 flatList : RootNode -> ItemList
-flatList (Node item children) =
+flatList root =
     let
         rest =
-            List.concatMap (\child -> flatList child) children
+            List.concatMap (\child -> flatList child) (childrenOf root)
     in
-        (Node item children) :: rest
+        root :: rest
 
 
 flatItemMap : (Item -> Item) -> RootNode -> ItemList
 flatItemMap aFunction root =
-    List.map (\(Node item children) -> Node (aFunction item) children) (flatList root)
+    List.map (\child -> Node (aFunction (itemOf child)) (childrenOf root)) (flatList root)
 
 
 flatNodeMap : (Node Item -> Node Item) -> Node Item -> ItemList
 flatNodeMap aFunction root =
-    List.map (\item -> aFunction item) (flatList root)
+    List.map (\aNode -> aFunction aNode) (flatList root)
 
 
 flatItemFilter : (Item -> Bool) -> RootNode -> ItemList
 flatItemFilter aFunction root =
-    List.filter (\(Node item _) -> aFunction item) (flatList root)
+    List.filter (\aNode -> (aFunction (itemOf aNode))) (flatList root)
 
 
 flatNodeFilter : (Node Item -> Bool) -> RootNode -> ItemList
 flatNodeFilter aFunction root =
-    List.filter (\node -> aFunction node) (flatList root)
+    List.filter (\aNode -> aFunction aNode) (flatList root)
 
 
 {-| returns a new version of the Node parameter (e.g. rootNode)
     with all nodes' items coming through the passed function
 -}
 nestedItemMap : (Item -> Item) -> RootNode -> RootNode
-nestedItemMap aFunction (Node item children) =
+nestedItemMap aFunction root =
     let
         newChildren =
-            List.map (\child -> nestedItemMap aFunction child) children
+            List.map (\child -> nestedItemMap aFunction child) (childrenOf root)
     in
-        Node (aFunction item) newChildren
+        Node (aFunction (itemOf root)) newChildren
 
 
 {-| returns a new version of the Node parameter (e.g. rootNode)
@@ -357,12 +379,12 @@ nestedItemMap aFunction (Node item children) =
     of the child's parent
 -}
 nestedNodeMap : (Node Item -> Node Item) -> RootNode -> RootNode
-nestedNodeMap aFunction (Node item children) =
+nestedNodeMap aFunction root =
     let
         newChildren =
-            List.map (\child -> nestedNodeMap aFunction child) children
+            List.map (\child -> nestedNodeMap aFunction child) (childrenOf root)
     in
-        aFunction (Node item newChildren)
+        aFunction (Node (itemOf root) newChildren)
 
 
 {-| returns a new version of the Node parameter (e.g. rootNode)
@@ -374,12 +396,12 @@ nestedNodeMap aFunction (Node item children) =
     would have been approved.
 -}
 nestedItemFilter : (Item -> Bool) -> RootNode -> Maybe (Node Item)
-nestedItemFilter aFunction (Node item children) =
+nestedItemFilter aFunction root =
     let
         newChildren =
-            List.filterMap (\child -> nestedItemFilter aFunction child) children
+            List.filterMap (\child -> nestedItemFilter aFunction child) (childrenOf root)
     in
-        if aFunction item then
-            Just (Node item newChildren)
+        if aFunction (itemOf root) then
+            Just (Node (itemOf root) newChildren)
         else
             Nothing
