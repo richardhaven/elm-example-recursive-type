@@ -13,12 +13,12 @@ rootTest : Test
 rootTest =
     let
         firstRoot =
-            Node.createRoot "rootId" "root" "is a root"
+            Node.createRoot "root Id" "root" "is a root"
     in
         describe "Test createRoot" <|
             [ test "Create root id" <|
                 \() ->
-                    Expect.equal (itemOf firstRoot).id "rootId"
+                    Expect.equal (itemOf firstRoot).id "root Id"
             , test "Create root title" <|
                 \() ->
                     Expect.equal (itemOf firstRoot).title "root"
@@ -36,10 +36,10 @@ rootTest =
                     Expect.equal (List.length (Node.flatList firstRoot)) 1
             , test "Check findNodesById for root" <|
                 \() ->
-                    Expect.notEqual (findNodeById "rootId" firstRoot) Nothing
+                    Expect.notEqual (findNodeById "root Id" firstRoot) Nothing
             , test "Check findNodeByTitle for root" <|
                 \() ->
-                    Expect.notEqual (findNodesByTitle "root" firstRoot) []
+                    Expect.equal (List.length (findNodesByTitle "root" firstRoot)) 1
             , test "Negative check findNodeById" <|
                 \() ->
                     Expect.equal (findNodeById "XXXX" firstRoot) Nothing
