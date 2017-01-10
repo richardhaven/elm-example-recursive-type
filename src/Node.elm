@@ -189,27 +189,36 @@ getValidationErrors newChild root =
         Nothing
 
 
-{-| Removes the Item and returns the new rootNode
+{-| Removes the indicated Item and returns the new rootNode
 
     {model | rootNode = deleteChild doomedItem model.rootNode}
 -}
-deleteChild : Node Item -> RootNode -> Result String RootNode
-deleteChild (Node doomedItem _) root =
-    Ok
-        (nestedNodeMap
-            (\(Node item children) ->
-                if item.id == doomedItem.parentId then
-                    Node item (List.filter (\(Node item children) -> item.id /= doomedItem.id) children)
-                else
-                    Node item children
-            )
-            root
-        )
+deleteChild : ItemId -> RootNode -> Result String RootNode
+deleteChild targetId root =
+    let
+        targetNodeMaybe =
+            findNodeById targetId root
+    in
+        case targetNodeMaybe of
+            Nothing ->
+                Err ("Cannot find target item id " ++ (toString targetId))
+
+            Just (Node targetItem _) ->
+                Ok
+                    (nestedNodeMap
+                        (\(Node item children) ->
+                            if item.id == targetItem.parentId then
+                                Node item (List.filter (\(Node anItem aChildren) -> anItem.id /= targetId) children)
+                            else
+                                Node item children
+                        )
+                        root
+                    )
 
 
-{-| Updates the Item and returns the new rootNode
+{-| Updates the indicated Item and returns the new rootNode
 
-    {model | rootNode = updateChild (\item -> {item | title = "Fred") model.rootNode}
+    {model | rootNode = updateChild (\item -> {item | title = "Fred") "child1223" model.rootNode}
 
     This wrapper around nestedItemMap prevents accidentally forgetting to test for a specific
     Item id and modifying every Item.
@@ -218,25 +227,34 @@ deleteChild (Node doomedItem _) root =
 
     Do NOT change the parentId here; use changeParent
 -}
-updateItem : (Item -> Item) -> Node Item -> RootNode -> Result String RootNode
-updateItem aFunction (Node targetItem _) root =
-    Ok
-        (nestedItemMap
-            (\item ->
-                let
-                    oldParentId =
-                        item.parentId
+updateItem : (Item -> Item) -> ItemId -> RootNode -> Result String RootNode
+updateItem aFunction targetId root =
+    let
+        targetNodeMaybe =
+            findNodeById targetId root
+    in
+        case targetNodeMaybe of
+            Nothing ->
+                Err ("Cannot find target item id " ++ (toString targetId))
 
-                    oldId =
-                        item.id
-                in
-                    if item.id == targetItem.id then
-                        (\anItem -> { anItem | id = oldId, parentId = oldParentId }) <| (aFunction item)
-                    else
-                        item
-            )
-            root
-        )
+            Just (Node targetItem _) ->
+                Ok
+                    (nestedItemMap
+                        (\item ->
+                            let
+                                oldParentId =
+                                    item.parentId
+
+                                oldId =
+                                    item.id
+                            in
+                                if item.id == targetItem.id then
+                                    (\anItem -> { anItem | id = oldId, parentId = oldParentId }) <| (aFunction item)
+                                else
+                                    item
+                        )
+                        root
+                    )
 
 
 {-|
@@ -250,33 +268,51 @@ updateItem aFunction (Node targetItem _) root =
             {model | errorMessage = "", root = newRootNode}
 
 -}
-changeParent : Node Item -> ItemId -> RootNode -> Result String RootNode
-changeParent (Node originalItem originalItemChldren) newParentId root =
-    if originalItem.id == newParentId then
-        Err "An item must not have itself as its parent"
-    else if originalItem.parentId == newParentId then
-        Ok root
-    else if (findNodeById newParentId root) == Nothing then
-        Err "New parent not found"
-    else
-        Ok
-            (nestedNodeMap
-                (\(Node item children) ->
-                    --  we remove the item from the previous parent
-                    if item.id == originalItem.parentId then
-                        Node item
-                            (List.filter (\(Node item _) -> item.id /= originalItem.id) children)
-                        --  and add it to the new parent's children (and update its .parentId)
-                    else if item.id == newParentId then
-                        Node item
-                            ((Node { originalItem | parentId = newParentId } originalItemChldren)
-                                :: children
-                            )
-                    else
-                        Node item children
-                )
-                root
+changeParent : ItemId -> ItemId -> RootNode -> Result String RootNode
+changeParent targetId newParentId root =
+    let
+        targetNodeMaybe =
+            findNodeById targetId root
+    in
+        case targetNodeMaybe of
+            Nothing ->
+                Err ("Cannot find target item id " ++ (toString targetId))
+
+            Just (Node targetItem targetChildren) ->
+                if targetItem.id == newParentId then
+                    Err "An item must not have itself as its parent"
+                else if targetItem.parentId == newParentId then
+                    Ok root
+                else if (findNodeById newParentId root) == Nothing then
+                    Err "New parent not found"
+                else
+                    Ok (setNodeParent (Node targetItem targetChildren) newParentId root)
+
+
+setNodeParent : Node Item -> ItemId -> RootNode -> RootNode
+setNodeParent targetNode newParentId root =
+    let
+        targetItem =
+            itemOf targetNode
+
+        updatedItem =
+            { targetItem | parentId = newParentId }
+
+        updatedNode =
+            Node updatedItem (childrenOf targetNode)
+    in
+        nestedNodeMap
+            (\(Node anItem aChildren) ->
+                --  we remove the item from the previous parent
+                if anItem.id == targetItem.parentId then
+                    Node anItem (List.filter (\(Node childItem _) -> childItem.id /= targetItem.id) aChildren)
+                    --  and add it to the new parent's children (and update its .parentId)
+                else if anItem.id == newParentId then
+                    Node anItem (updatedNode :: aChildren)
+                else
+                    Node anItem aChildren
             )
+            root
 
 
 isItemMember : ItemId -> RootNode -> Bool

@@ -21,6 +21,7 @@ threeGenerationTest =
         , threeGenerationChangeParentComplexTest
         , threeGenerationDeleteLeafItemTest
         , threeGenerationDeleteBranchItemTest
+        , threeGenerationDeleteBranchItemChildTest
         , threeGenerationOldParentDeleteLeafItemTest
         , threeGenerationDeleteItemCheckNewParentTest
         , threeGenerationDeleteItemCheckOldParentTest
@@ -54,6 +55,37 @@ createThreeGenerations =
     let
         firstRoot =
             Node.createRoot "complex root id" "root title" "is a root"
+    in
+        Node.createChildren simpleChildren firstRoot
+
+
+moreChildren : List Item
+moreChildren =
+    [ { id = "child1 child1 id", parentId = "child1 id", title = "child11 title", description = "child11 description" }
+    , { id = "child1 child2 id", parentId = "child1 id", title = "child12 title", description = "child12 description" }
+    , { id = "child2 child2 id", parentId = "child2 id", title = "child22 title", description = "child22 description" }
+    , { id = "grandchild child id", parentId = "grandchild id", title = "child211 title", description = "child211 description" }
+    ]
+
+
+{-|
+                                               root
+                                                |
+                                  ---------------------------
+                                  |                         |
+                                child1                    child2
+                                  | - child1 child1 id      | - child2 child2 id
+                                  | - child1 child2 id      | - grandchild id
+                                                                     |
+                                                              grandchild child id
+-}
+createMoreThreeGenerations : Result String (Node Item)
+createMoreThreeGenerations =
+    let
+        firstRoot =
+            Node.createRoot "complex root id" "root title" "is a root"
+    in
+=======
     in
         Node.createChildren simpleChildren firstRoot
 
@@ -199,6 +231,9 @@ threeGenerationUpdateItemTest =
     let
         lastRoot =
             createThreeGenerations
+
+        targetId =
+            "child2 id"
     in
         describe "Test updating an item" <|
             case lastRoot of
@@ -206,7 +241,7 @@ threeGenerationUpdateItemTest =
                     [ test "Create children and grandchildren Nodes" <| \() -> Expect.fail message ]
 
                 Ok rootNode ->
-                    case findNodeById "child2 id" rootNode of
+                    case findNodeById targetId rootNode of
                         Nothing ->
                             [ test "Finding target item" <| \() -> Expect.fail "Cannot find target" ]
 
@@ -214,12 +249,12 @@ threeGenerationUpdateItemTest =
                             [ test "startng state" <|
                                 \() -> Expect.notEqual (itemOf targetNode).description "I've been changed"
                             , test "Test updating an item" <|
-                                case (updateItem (\item -> { item | description = "I've been changed" }) targetNode rootNode) of
+                                case (updateItem (\item -> { item | description = "I've been changed" }) targetId rootNode) of
                                     Err message ->
                                         \() -> Expect.fail message
 
                                     Ok updatedRootNode ->
-                                        case findNodeById "child2 id" updatedRootNode of
+                                        case findNodeById targetId updatedRootNode of
                                             Nothing ->
                                                 \() -> Expect.fail "Cannot find updated target"
 
@@ -233,6 +268,9 @@ threeGenerationNewParentChangeParentTest =
     let
         lastRoot =
             createThreeGenerations
+
+        targetId =
+            "grandchild id"
     in
         describe "Test changing an item's parent" <|
             case lastRoot of
@@ -240,13 +278,13 @@ threeGenerationNewParentChangeParentTest =
                     [ test "Create children and grandchildren Nodes" <| \() -> Expect.fail message ]
 
                 Ok rootNode ->
-                    case findNodeById "grandchild id" rootNode of
+                    case findNodeById targetId rootNode of
                         Nothing ->
                             [ test "Finding target item" <| \() -> Expect.fail "Cannot find target" ]
 
                         Just targetNode ->
                             [ test "Check the new parent" <|
-                                case (changeParent targetNode "child1 id" rootNode) of
+                                case (changeParent targetId "child1 id" rootNode) of
                                     Err message ->
                                         \() -> Expect.fail message
 
@@ -265,6 +303,9 @@ threeGenerationOldParentChangeParentTest =
     let
         lastRoot =
             createThreeGenerations
+
+        targetId =
+            "grandchild id"
     in
         describe "Test changing an item's parent" <|
             case lastRoot of
@@ -272,13 +313,13 @@ threeGenerationOldParentChangeParentTest =
                     [ test "Create children and grandchildren Nodes" <| \() -> Expect.fail message ]
 
                 Ok rootNode ->
-                    case findNodeById "grandchild id" rootNode of
+                    case findNodeById targetId rootNode of
                         Nothing ->
                             [ test "Finding target item" <| \() -> Expect.fail "Cannot find target" ]
 
                         Just targetNode ->
                             [ test "Check the old parent" <|
-                                case (changeParent targetNode "child1 id" rootNode) of
+                                case (changeParent targetId "child1 id" rootNode) of
                                     Err message ->
                                         \() -> Expect.fail message
 
@@ -297,6 +338,9 @@ threeGenerationParentIdChangeParentTest =
     let
         lastRoot =
             createThreeGenerations
+
+        targetId =
+            "grandchild id"
     in
         describe "Test changing an item's parent" <|
             case lastRoot of
@@ -304,13 +348,13 @@ threeGenerationParentIdChangeParentTest =
                     [ test "Create children and grandchildren Nodes" <| \() -> Expect.fail message ]
 
                 Ok rootNode ->
-                    case findNodeById "grandchild id" rootNode of
+                    case findNodeById targetId rootNode of
                         Nothing ->
                             [ test "Finding target item" <| \() -> Expect.fail "Cannot find target" ]
 
                         Just targetNode ->
                             [ test "Check the item parentId" <|
-                                case (changeParent targetNode "child1 id" rootNode) of
+                                case (changeParent targetId "child1 id" rootNode) of
                                     Err message ->
                                         \() -> Expect.fail message
 
@@ -330,18 +374,21 @@ setupChangeParent =
     let
         lastRoot =
             createMoreThreeGenerations
+
+        targetId =
+            "grandchild id"
     in
         case lastRoot of
             Err message ->
                 Err message
 
             Ok rootNode ->
-                case findNodeById "grandchild id" rootNode of
+                case findNodeById targetId rootNode of
                     Nothing ->
-                        Err "Cannot find target \"grandchild id\""
+                        Err ("Cannot find target \"" ++ targetId ++ "\"")
 
                     Just targetNode ->
-                        changeParent targetNode "child1 id" rootNode
+                        changeParent targetId "child1 id" rootNode
 
 
 threeGenerationChangeParentComplexTest : Test
@@ -349,6 +396,9 @@ threeGenerationChangeParentComplexTest =
     let
         lastRoot =
             setupChangeParent
+
+        targetId =
+            "grandchild id"
     in
         describe "Test changing an item's parent into existing children" <|
             case lastRoot of
@@ -371,9 +421,20 @@ threeGenerationChangeParentComplexTest =
                             Just oldParent ->
                                 \() -> Expect.equal (List.length (childrenOf oldParent)) 1
                     , test "Check the item parentId" <|
-                        case findNodeById "grandchild id" rootNode of
+                        case findNodeById targetId rootNode of
                             Nothing ->
                                 \() -> Expect.fail "Cannot find target after moving Item"
+
+                            Just foundNode ->
+                                \() -> Expect.equal (itemOf foundNode).parentId "child1 id"
+                    , test "Check the item children" <|
+                        case findNodeById targetId rootNode of
+                            Nothing ->
+                                \() -> Expect.fail "Cannot find target after moving Item"
+
+                            Just foundNode ->
+                                \() -> Expect.equal (List.length (childrenOf foundNode)) 1
+                    ]
 
                             Just foundNode ->
                                 \() -> Expect.equal (itemOf foundNode).parentId "child1 id"
@@ -392,6 +453,9 @@ threeGenerationDeleteLeafItemTest =
     let
         lastRoot =
             createMoreThreeGenerations
+
+        targetId =
+            "grandchild id"
     in
         describe "Test deleting a leaf item" <|
             case lastRoot of
@@ -400,17 +464,17 @@ threeGenerationDeleteLeafItemTest =
 
                 Ok rootNode ->
                     [ test "Search for the item" <|
-                        case findNodeById "grandchild id" rootNode of
+                        case findNodeById targetId rootNode of
                             Nothing ->
-                                \() -> Expect.fail "Cannot find target item"
+                                \() -> Expect.fail "Cannot find target item before deleting"
 
                             Just targetItem ->
-                                case (deleteChild targetItem rootNode) of
+                                case deleteChild targetId rootNode of
                                     Err message ->
                                         \() -> Expect.fail message
 
                                     Ok updatedRootNode ->
-                                        \() -> Expect.equal (findNodeById "grandchild id" updatedRootNode) Nothing
+                                        \() -> Expect.equal (findNodeById targetId updatedRootNode) Nothing
                     ]
 
 
@@ -419,6 +483,9 @@ threeGenerationDeleteBranchItemTest =
     let
         lastRoot =
             createMoreThreeGenerations
+
+        targetId =
+            "child2 id"
     in
         describe "Test deleting a brach item (i.e. with children)" <|
             case lastRoot of
@@ -433,12 +500,40 @@ threeGenerationDeleteBranchItemTest =
 
                             Just targetItem ->
                                 \() ->
-                                    case (deleteChild targetItem rootNode) of
+                                    case (deleteChild (itemOf targetItem).id rootNode) of
                                         Err message ->
                                             Expect.fail message
 
                                         Ok updatedRootNode ->
                                             Expect.equal (findNodeById "child2 id" updatedRootNode) Nothing
+                    ]
+
+
+threeGenerationDeleteBranchItemChildTest : Test
+threeGenerationDeleteBranchItemChildTest =
+    let
+        lastRoot =
+            createMoreThreeGenerations
+    in
+        describe "Test deleting a brach item (i.e. with children)" <|
+            case lastRoot of
+                Err message ->
+                    [ test "Create children and grandchildren Nodes" <| \() -> Expect.fail message ]
+
+                Ok rootNode ->
+                    [ test "Search for the item's child" <|
+                        case findNodeById "grandchild id" rootNode of
+                            Nothing ->
+                                \() -> Expect.fail "Cannot find target item's child"
+
+                            Just targetItem ->
+                                \() ->
+                                    case (deleteChild (itemOf targetItem).id rootNode) of
+                                        Err message ->
+                                            Expect.fail message
+
+                                        Ok updatedRootNode ->
+                                            Expect.equal (findNodeById "grandchild id" updatedRootNode) Nothing
                     ]
 
 
@@ -461,7 +556,7 @@ threeGenerationOldParentDeleteLeafItemTest =
                                     Expect.fail "Cannot find target item"
 
                                 Just targetItem ->
-                                    case (deleteChild targetItem rootNode) of
+                                    case (deleteChild (itemOf targetItem).id rootNode) of
                                         Err message ->
                                             Expect.fail message
 
@@ -494,7 +589,7 @@ threeGenerationDeleteItemCheckNewParentTest =
 
                             Just targetItem ->
                                 \() ->
-                                    case (deleteChild targetItem rootNode) of
+                                    case (deleteChild (itemOf targetItem).id rootNode) of
                                         Err message ->
                                             Expect.fail message
 
@@ -521,7 +616,7 @@ threeGenerationDeleteItemCheckOldParentTest =
                                 \() -> Expect.fail "Cannot find target item"
 
                             Just targetItem ->
-                                case (deleteChild targetItem rootNode) of
+                                case (deleteChild (itemOf targetItem).id rootNode) of
                                     Err message ->
                                         \() -> Expect.fail message
 
@@ -577,7 +672,7 @@ threeGenerationNegativeTest =
                                 Just targetItem ->
                                     Expect.true "negative updateItem non-existent new parent id"
                                         (isResultErr
-                                            (changeParent targetItem "non-existent id" rootNode)
+                                            (changeParent (itemOf targetItem).id "non-existent id" rootNode)
                                         )
                     , test "positive changeParent for previous parent id" <|
                         \() ->
@@ -588,7 +683,7 @@ threeGenerationNegativeTest =
                                 Just targetItem ->
                                     Expect.false "positive updateItem non-existent new parent id"
                                         (isResultErr
-                                            (changeParent targetItem "child2 id" rootNode)
+                                            (changeParent (itemOf targetItem).id "child2 id" rootNode)
                                         )
                     , test "negative changeParent for the same id for item and parent" <|
                         \() ->
@@ -599,7 +694,7 @@ threeGenerationNegativeTest =
                                 Just targetItem ->
                                     Expect.true "negative changeParent for the same id for item and parent"
                                         (isResultErr
-                                            (changeParent targetItem "grandchild id" rootNode)
+                                            (changeParent (itemOf targetItem).id (itemOf targetItem).id rootNode)
                                         )
                     , test "negative isItemMember" <|
                         \() -> Expect.false "isItemMember \"XXXXX\"" (isItemMember "XXXXX" rootNode)
